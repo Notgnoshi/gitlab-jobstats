@@ -1,8 +1,12 @@
 #!/usr/bin/env python3
 """Query a GitLab project for CI/CD job statistics."""
 import argparse
+import json
 import logging
 import sys
+import urllib.parse
+import urllib.request
+from typing import Dict, List, Optional, Union
 
 
 def parse_args():
@@ -76,6 +80,62 @@ def parse_args():
 
 def main(args):
     token = get_token(args)
+    endpoint = f"https://{args.domain}/api/v4"
+
+    pipelines = get_pipelines(
+        token, endpoint, args.project, args.branch, args.max_pipelines, args.since
+    )
+
+
+def http_get_json(token: str, url: str) -> Union[List, Dict]:
+    """Make the given HTTP GET request with the given auth token."""
+    logging.debug("GET %s ...", url)
+    request = urllib.request.Request(url)
+    request.add_header("PRIVATE-TOKEN", token)
+    with urllib.request.urlopen(request) as response:
+        if response.status != 200:
+            logging.error("Request '%s' failed: %d", url, response.status)
+            sys.exit(1)
+        data = response.read()
+        data = data.decode(response.info().get_param("charset") or "utf-8")
+        data = json.loads(data)
+        return data
+
+
+def get_pipelines(
+    token: str,
+    endpoint: str,
+    project: str,
+    branch: Optional[str],
+    max_pipelines: Optional[int],
+    since: Optional[str],
+) -> List[Dict]:
+    """Get the most recent CI/CD pipelines for the given project."""
+    project = urllib.parse.quote_plus(project)
+    if since:
+        # If we're limiting via the creation date, we don't want to limit the number of pipelines
+        max_pipelines = None
+    per_page = max_pipelines or 100
+
+    page_num = 1
+    url = f"{endpoint}/projects/{project}/pipelines?per_page={per_page}"
+    if branch:
+        url += f"&ref={branch}"
+    if since:
+        url += f"&created_after={since}"
+
+    pipelines = []
+    while True:
+        page = http_get_json(token, f"{url}&page={page_num}")
+
+        page_num += 1
+        pipelines += page
+
+        if not page or len(page) < per_page or max_pipelines and len(pipelines) >= max_pipelines:
+            break
+
+    logging.debug("... Found %d pipelines", len(pipelines))
+    return pipelines
 
 
 def get_token(args) -> str:
