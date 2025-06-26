@@ -165,7 +165,7 @@ def jobs2csv(output, jobs: List[Dict]):
         output.write(f"\"{job['name']}\",")
         output.write(f"{job['status']},")
         output.write(f"{job['duration']},")
-        output.write(f"{job['queued_duration']},")
+        output.write(f"{job['queued_duration']}")
         output.write("\n")
 
 
