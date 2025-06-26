@@ -92,6 +92,8 @@ def main(args):
         jobs += pipeline_jobs
     logging.info("Found %d total jobs for %s", len(jobs), args.project)
 
+    jobs2csv(args.output, jobs)
+
 
 def http_get_json(token: str, url: str) -> Union[List, Dict]:
     """Make the given HTTP GET request with the given auth token."""
@@ -150,6 +152,21 @@ def get_jobs_for_pipeline(token: str, endpoint: str, project: str, pipeline_id: 
     url = f"{endpoint}/projects/{project}/pipelines/{pipeline_id}/jobs?include_retried=true"
     jobs = http_get_json(token, url)
     return jobs
+
+
+def jobs2csv(output, jobs: List[Dict]):
+    """Write each job's details to a CSV file for future analysis."""
+    output.write("job-id,pipeline-id,job-url,created-date,name,status,duration,queued-duration\n")
+    for job in jobs:
+        output.write(f"{job['id']},")
+        output.write(f"{job['pipeline']['id']},")
+        output.write(f"{job['web_url']},")
+        output.write(f"{job['created_at']},")
+        output.write(f"\"{job['name']}\",")
+        output.write(f"{job['status']},")
+        output.write(f"{job['duration']},")
+        output.write(f"{job['queued_duration']},")
+        output.write("\n")
 
 
 def get_token(args) -> str:
