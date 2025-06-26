@@ -85,6 +85,12 @@ def main(args):
     pipelines = get_pipelines(
         token, endpoint, args.project, args.branch, args.max_pipelines, args.since
     )
+    logging.info("Found %d total pipelines for %s", len(pipelines), args.project)
+    jobs = []
+    for pipeline in pipelines:
+        pipeline_jobs = get_jobs_for_pipeline(token, endpoint, args.project, pipeline["id"])
+        jobs += pipeline_jobs
+    logging.info("Found %d total jobs for %s", len(jobs), args.project)
 
 
 def http_get_json(token: str, url: str) -> Union[List, Dict]:
@@ -133,9 +139,17 @@ def get_pipelines(
 
         if not page or len(page) < per_page or max_pipelines and len(pipelines) >= max_pipelines:
             break
-
-    logging.debug("... Found %d pipelines", len(pipelines))
     return pipelines
+
+
+def get_jobs_for_pipeline(token: str, endpoint: str, project: str, pipeline_id: int) -> List[Dict]:
+    """Get the jobs for the given pipeline."""
+    project = urllib.parse.quote_plus(project)
+    # Assume that no pipeline has more than the pagination limit number of jobs. Include retried
+    # jobs, because the purpose of this project is to get statistics for flaky CI/CD jobs
+    url = f"{endpoint}/projects/{project}/pipelines/{pipeline_id}/jobs?include_retried=true"
+    jobs = http_get_json(token, url)
+    return jobs
 
 
 def get_token(args) -> str:
