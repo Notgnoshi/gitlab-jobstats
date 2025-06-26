@@ -17,7 +17,7 @@ def parse_args():
         "--log-level",
         "-l",
         type=str,
-        default="DEBUG",
+        default="INFO",
         choices=["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"],
         help="Set the logging output level. Defaults to INFO.",
     )
@@ -60,7 +60,7 @@ def parse_args():
     filter_limit.add_argument(
         "--max-pipelines",
         type=int,
-        default=2,  # TODO: Increase once finished
+        default=20,
         help="The maximum number of jobs to query",
     )
     filter_limit.add_argument(
