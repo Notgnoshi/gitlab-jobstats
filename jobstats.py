@@ -185,7 +185,7 @@ def get_token(args) -> str:
 
 if __name__ == "__main__":
     args = parse_args()
-    fmt = "%(asctime)s - %(module)s - %(levelname)s: %(message)s"
+    fmt = "%(asctime)s %(module)s %(levelname)s: %(message)s"
     logging.basicConfig(
         format=fmt,
         datefmt="%Y-%m-%dT%H:%M:%S%z",
