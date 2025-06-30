@@ -156,14 +156,18 @@ def get_jobs_for_pipeline(token: str, endpoint: str, project: str, pipeline_id: 
 
 def jobs2csv(output, jobs: List[Dict]):
     """Write each job's details to a CSV file for future analysis."""
-    output.write("job-id,pipeline-id,job-url,created-date,name,status,duration,queued-duration\n")
+    output.write(
+        "job-id,pipeline-id,job-url,created-date,name,branch,status,coverage,duration,queued-duration\n"
+    )
     for job in jobs:
         output.write(f"{job['id']},")
         output.write(f"{job['pipeline']['id']},")
         output.write(f"{job['web_url']},")
         output.write(f"{job['created_at']},")
         output.write(f"\"{job['name']}\",")
+        output.write(f"{job['ref']},")
         output.write(f"{job['status']},")
+        output.write(f"{job['coverage']},")
         output.write(f"{job['duration']},")
         output.write(f"{job['queued_duration']}")
         output.write("\n")
