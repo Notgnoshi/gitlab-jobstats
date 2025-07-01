@@ -3,11 +3,12 @@
 import argparse
 import collections
 import csv
+import datetime
 import fnmatch
 import logging
 import operator
 import sys
-from typing import Dict, List
+from typing import Dict, Iterator, List
 
 
 def parse_args():
@@ -47,19 +48,27 @@ def parse_args():
 
 def main(args):
     jobs = csv.DictReader(args.input)
-    jobs = (j for j in jobs if any(fnmatch.fnmatchcase(j["name"], pat) for pat in args.jobs))
-    jobs = list(jobs)
+    jobs = [j for j in jobs if any(fnmatch.fnmatchcase(j["name"], pat) for pat in args.jobs)]
+    for job in jobs:
+        job["created-date"] = datetime.datetime.fromisoformat(job["created-date"])
 
     summarize(jobs)
     most_common_failures(jobs)
+
+    if args.plot:
+        plot_failures(jobs)
+
+
+def count_by_status(jobs: List[Dict], status: str) -> int:
+    return sum(1 for j in jobs if j["status"] == status)
 
 
 def summarize(jobs: List[Dict]):
     """Calculate a basic summary."""
     total = len(jobs)
-    num_success = sum(1 for j in jobs if j["status"] == "success")
+    num_success = count_by_status(jobs, "success")
     percent_success = (num_success / total) * 100
-    num_failed = sum(1 for j in jobs if j["status"] == "failed")
+    num_failed = count_by_status(jobs, "failed")
     percent_failed = (num_failed / total) * 100
 
     print(f"total jobs:  {total}")
@@ -81,6 +90,58 @@ def most_common_failures(jobs: List[Dict]):
     print("job breakdown:")
     for job, num_failures in most_common:
         print(f"    failures: {num_failures} job: {job}")
+
+
+def month_iter(start: datetime.datetime, stop: datetime.datetime) -> Iterator[datetime.date]:
+    """Iterate over the months in between the given inclusive datetimes."""
+    ym_start = 12 * start.year + start.month - 1
+    ym_end = 12 * stop.year + stop.month - 1
+    for ym in range(ym_start, ym_end):
+        y, m = divmod(ym, 12)
+        yield datetime.date(year=y, month=m, day=1)
+
+
+def fill_under_lines(ax, alpha=0.2, **kwargs):
+    for line in ax.lines:
+        x, y = line.get_xydata().T
+        ax.fill_between(x, 0, y, color=line.get_color(), alpha=alpha, **kwargs)
+
+
+def plot_failures(jobs: List[Dict]):
+    """Plot a stacked timeseries of successful and failed jobs over time."""
+    import matplotlib.pyplot as plt
+    import seaborn as sns
+
+    logging.getLogger("matplotlib").setLevel(logging.WARNING)
+    sns.set_theme()
+
+    # Time is continuous, so build out an array of all months in between the start and stop dates
+    dates = sorted(j["created-date"] for j in jobs)
+    months = month_iter(dates[0], dates[-1])
+    months = [f"{date.year}-{date.month}" for date in dates]
+
+    # Aggregate jobs by month they were created
+    jobs_by_month: Dict[str, List[Dict]] = collections.defaultdict(list)
+    for job in jobs:
+        date = job["created-date"]
+        date = f"{date.year}-{date.month}"
+        jobs_by_month[date].append(job)
+
+    total_by_month = [len(jobs_by_month[m]) for m in months]
+    success_by_month = [count_by_status(jobs_by_month[m], "success") for m in months]
+    failed_by_month = [count_by_status(jobs_by_month[m], "failed") for m in months]
+
+    sns.lineplot(x=months, y=total_by_month, label="total")
+    sns.lineplot(x=months, y=failed_by_month, label="failed")
+    sns.lineplot(x=months, y=success_by_month, label="success")
+
+    fill_under_lines(plt.gca())
+
+    plt.title("CI/CD Jobs Over Time")
+    plt.xlabel("Month")
+    plt.ylabel("Count")
+    plt.legend(loc="upper right")
+    plt.show()
 
 
 if __name__ == "__main__":
