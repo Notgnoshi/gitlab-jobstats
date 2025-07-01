@@ -7,13 +7,13 @@ Query statistics for GitLab CI/CD jobs
 ./jobstats.py \
     --token-file ~/.gitlab-pat.txt \
     --domain gitlab.com \
-    --project my-group/my-project \
     --branch master \
     --since 2025-01-01 \
-    --output my-project.csv
+    my-group/my-project \
+    my-project.csv
 ```
 
-This will generate a CSV of jobs for all pipelines on the specified branch. Here's an example
+This will generate a CSV of jobs for all pipelines on the specified branch. Here's an example:
 
 ```
 job-id,pipeline-id,job-url,created-date,name,status,duration,queued-duration

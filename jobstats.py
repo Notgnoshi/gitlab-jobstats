@@ -22,10 +22,12 @@ def parse_args():
         help="Set the logging output level. Defaults to INFO.",
     )
     parser.add_argument(
-        "--output",
-        "-o",
+        "project",
+        help="The full group/project path, or a project ID",
+    )
+    parser.add_argument(
+        "output",
         type=argparse.FileType("w"),
-        default=sys.stdout,
         help="Script output. Defaults to stdout.",
     )
 
@@ -49,12 +51,6 @@ def parse_args():
         "-d",
         default="gitlab.cnh.com",
         help="The domain for your GitLab instance. Defaults to gitlab.cnh.com",
-    )
-    group.add_argument(
-        "--project",
-        "-p",
-        required=True,
-        help="The full group/project path, or a project ID",
     )
     filter_limit = group.add_mutually_exclusive_group()
     filter_limit.add_argument(
