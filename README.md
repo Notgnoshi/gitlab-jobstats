@@ -2,6 +2,15 @@
 
 Query statistics for GitLab CI/CD jobs
 
+# How is this different from `https://gitlab.cnh.com/${PROJECT}/-/pipelines/charts`?
+
+Jobstats was designed with the goal of identifying and fixing flaky CI jobs.
+
+* jobstats can filter by branch
+* jobstats can filter by job name
+* jobstats looks at jobs, and includes retried jobs, while GitLab's stats look at pipelines (you can
+  rerun jobs to make a failing pipeline pass)
+
 # Download from the GitLab API
 
 ```shell
