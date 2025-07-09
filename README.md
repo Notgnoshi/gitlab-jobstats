@@ -88,13 +88,41 @@ $ ./joboutput.py \
 
 This will download the job output into `data/my-project/{job_id}.txt` for each `job_id`.
 
+# Identify most frequently failing tests
+
+A large motivation for building this set of tooling is to help identify what flaky tests are the
+worst offenders, to help prioritizing the most impactful to fix.
+
+Given failing job output in a directory above, you can scrape for the names of failing tests like
+so:
+
+```shell
+$ ./teststats.py data/my-project/*
+lib::submod1::my_flaky_test_1:
+        failures: 24
+lib::submod2::my_flaky_test_2:
+        failures: 21
+lib::submod2::my_flaky_test_3:
+        failures: 13
+```
+
+If you pass `--list`, it will list the paths to the `{job_id}.txt` output files for each test (this
+can get spammy).
+
+`teststats.py` understands the test output of
+* GTest
+* `cargo-test`
+* `cargo-nextest`
+
+You can provide your own RegEx to capture failing test names with `--pattern`.
+
 # TODO
 
 * [x] Build tooling to summarize job failures
 * [x] Build tooling to nicely visualize the job failures? (what's the right visualization for job
       failures that actually provides insight?)
 * [x] Build tooling to identify jobs that fail more frequently than other jobs
-* [ ] Build tooling to help identify any systemic flaky tests.
+* [x] Build tooling to help identify any systemic flaky tests.
 
   Perhaps pass a regex to scrape job stderr output with? (e.g., identify names of failing tests). Or
   perhaps just automate opening the `job-url` in the browser, and prompt for a root cause?
