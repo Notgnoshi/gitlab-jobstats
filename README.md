@@ -2,7 +2,7 @@
 
 Query statistics for GitLab CI/CD jobs
 
-# How is this different from `https://gitlab.cnh.com/${PROJECT}/-/pipelines/charts`?
+# Why not use `https://gitlab.com/${PROJECT}/-/pipelines/charts`?
 
 Jobstats was designed with the goal of identifying and fixing flaky CI jobs.
 
@@ -11,7 +11,7 @@ Jobstats was designed with the goal of identifying and fixing flaky CI jobs.
 * jobstats looks at jobs, and includes retried jobs, while GitLab's stats look at pipelines (you can
   rerun jobs to make a failing pipeline pass)
 
-# Download from the GitLab API
+# Download job data from GitLab API
 
 ```shell
 ./jobstats.py \
@@ -27,13 +27,13 @@ This will generate a CSV of jobs for all pipelines on the specified branch. Here
 
 ```
 job-id,pipeline-id,job-url,created-date,name,status,duration,queued-duration
-7668536,1417944,https://gitlab.com/my-group/my-project-/jobs/7668536,2025-06-26T14:22:02.575-05:00,"job1",success,7.396026,0.420097,
-7668535,1417944,https://gitlab.com/my-group/my-project-/jobs/7668535,2025-06-26T14:22:02.569-05:00,"job2",success,20.611112,0.49462,
-7668534,1417944,https://gitlab.com/my-group/my-project-/jobs/7668534,2025-06-26T14:22:02.561-05:00,"job3",failed,8.140573,0.299714,
-7668533,1417944,https://gitlab.com/my-group/my-project-/jobs/7668533,2025-06-26T14:22:02.555-05:00,"job4",success,8.651492,0.939418,
+7668536,1417944,https://gitlab.com/my-group/my-project/-/jobs/7668536,2025-06-26T14:22:02.575-05:00,"job1",success,7.396026,0.420097,
+7668535,1417944,https://gitlab.com/my-group/my-project/-/jobs/7668535,2025-06-26T14:22:02.569-05:00,"job2",success,20.611112,0.49462,
+7668534,1417944,https://gitlab.com/my-group/my-project/-/jobs/7668534,2025-06-26T14:22:02.561-05:00,"job3",failed,8.140573,0.299714,
+7668533,1417944,https://gitlab.com/my-group/my-project/-/jobs/7668533,2025-06-26T14:22:02.555-05:00,"job4",success,8.651492,0.939418,
 ```
 
-# Success rate
+# Basic analysis
 
 ```shell
 $ ./jobplot.py data/my-project-2025.csv
@@ -62,8 +62,6 @@ job breakdown:
 
 which shows there's a disappointing proportion of test failures, but it doesn't show the whole
 story.
-
-# Visualize
 
 ```shell
 $ ./jobplot.py data/my-project-2025.csv --jobs 'test*' --plot
@@ -115,14 +113,3 @@ can get spammy).
 * `cargo-nextest`
 
 You can provide your own RegEx to capture failing test names with `--pattern`.
-
-# TODO
-
-* [x] Build tooling to summarize job failures
-* [x] Build tooling to nicely visualize the job failures? (what's the right visualization for job
-      failures that actually provides insight?)
-* [x] Build tooling to identify jobs that fail more frequently than other jobs
-* [x] Build tooling to help identify any systemic flaky tests.
-
-  Perhaps pass a regex to scrape job stderr output with? (e.g., identify names of failing tests). Or
-  perhaps just automate opening the `job-url` in the browser, and prompt for a root cause?
