@@ -64,13 +64,24 @@ which shows there's a disappointing proportion of test failures, but it doesn't 
 story.
 
 ```shell
-$ ./jobplot.py data/my-project-2025.csv --jobs 'test*' --plot
+$ ./jobplot.py data/my-project-2025.csv --jobs 'test*' --plot-failures
 ```
 
-![example plot](data/example.png)
+![example failures plot](data/example-failures.png)
 
 This shows that this project has made some progress on getting flaky tests under control, even if it
 still has a ways to go.
+
+You can also look at job durations:
+
+```shell
+$ ./jobplot.py data/my-project-2026-01.csv --jobs 'test*' --plot-durations
+```
+
+![example durations plot](data/example-durations.png)
+
+In this plot, you can see that there's two `test*` jobs, with one about ~8min longer than the other.
+You can also see that jobs started to queue longer starting min-January.
 
 # Download failing job outputs
 
@@ -108,6 +119,7 @@ If you pass `--list`, it will list the paths to the `{job_id}.txt` output files 
 can get spammy).
 
 `teststats.py` understands the test output of
+
 * GTest
 * `cargo-test`
 * `cargo-nextest`
