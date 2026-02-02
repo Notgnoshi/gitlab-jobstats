@@ -1,9 +1,11 @@
 #!/usr/bin/env python3
 """Query a GitLab project for CI/CD job statistics."""
+
 import argparse
 import json
 import logging
 import sys
+import time
 import urllib.parse
 import urllib.request
 from typing import Dict, List, Optional, Union
@@ -32,6 +34,13 @@ def parse_args():
     )
 
     group = parser.add_argument_group()
+    group.add_argument(
+        "--requests-per-second",
+        "-r",
+        type=float,
+        default=40,
+        help="Limit API requests to this many per second.",
+    )
 
     tokens = group.add_mutually_exclusive_group(required=True)
     tokens.add_argument(
@@ -75,17 +84,19 @@ def parse_args():
 
 
 def main(args):
+    rate_limit_delay = 1.0 / args.requests_per_second
     token = get_token(args)
     endpoint = f"https://{args.domain}/api/v4"
 
     pipelines = get_pipelines(
-        token, endpoint, args.project, args.branch, args.max_pipelines, args.since
+        token, endpoint, args.project, args.branch, args.max_pipelines, args.since, rate_limit_delay
     )
     logging.info("Found %d total pipelines for %s", len(pipelines), args.project)
     jobs = []
     for pipeline in pipelines:
         pipeline_jobs = get_jobs_for_pipeline(token, endpoint, args.project, pipeline["id"])
         jobs += pipeline_jobs
+        time.sleep(rate_limit_delay)
     logging.info("Found %d total jobs for %s", len(jobs), args.project)
 
     jobs2csv(args.output, jobs)
@@ -113,6 +124,7 @@ def get_pipelines(
     branch: Optional[str],
     max_pipelines: Optional[int],
     since: Optional[str],
+    rate_limit_delay: float,
 ) -> List[Dict]:
     """Get the most recent CI/CD pipelines for the given project."""
     project = urllib.parse.quote_plus(project)
@@ -135,8 +147,9 @@ def get_pipelines(
         page_num += 1
         pipelines += page
 
-        if not page or len(page) < per_page or max_pipelines and len(pipelines) >= max_pipelines:
+        if not page or len(page) < per_page or (max_pipelines and len(pipelines) >= max_pipelines):
             break
+        time.sleep(rate_limit_delay)
     return pipelines
 
 
@@ -160,7 +173,7 @@ def jobs2csv(output, jobs: List[Dict]):
         output.write(f"{job['pipeline']['id']},")
         output.write(f"{job['web_url']},")
         output.write(f"{job['created_at']},")
-        output.write(f"\"{job['name']}\",")
+        output.write(f'"{job["name"]}",')
         output.write(f"{job['ref']},")
         output.write(f"{job['status']},")
         output.write(f"{job['coverage']},")
