@@ -64,10 +64,10 @@ which shows there's a disappointing proportion of test failures, but it doesn't 
 story.
 
 ```shell
-$ ./jobplot.py data/my-project-2025.csv --jobs 'test*' --plot
+$ ./jobplot.py data/my-project-2025.csv --jobs 'test*' --plot-failures
 ```
 
-![example plot](data/example.png)
+![example failures plot](data/example-failures.png)
 
 This shows that this project has made some progress on getting flaky tests under control, even if it
 still has a ways to go.
