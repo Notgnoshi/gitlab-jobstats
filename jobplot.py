@@ -6,10 +6,12 @@ import collections
 import csv
 import datetime
 import fnmatch
+import itertools
 import logging
 import operator
+import statistics
 import sys
-from typing import Dict, Iterator, List
+from typing import Dict, Iterable, List, Tuple
 
 
 def parse_args():
@@ -43,6 +45,12 @@ def parse_args():
         action="store_true",
         help="Generate a timeseries plot. Requires matplotlib+seaborn",
     )
+    parser.add_argument(
+        "--plot-durations",
+        "-d",
+        action="store_true",
+        help="Generate a job duration plot. Requires matplotlib+seaborn",
+    )
 
     return parser.parse_args()
 
@@ -58,6 +66,9 @@ def main(args):
 
     if args.plot_failures:
         plot_failures(jobs)
+
+    if args.plot_durations:
+        plot_durations(jobs)
 
 
 def count_by_status(jobs: List[Dict], status: str) -> int:
@@ -76,6 +87,20 @@ def summarize(jobs: List[Dict]):
     print(f"    success:  {num_success} ({percent_success:.2f}%)")
     print(f"    failure:  {num_failed} ({percent_failed:.2f}%)")
 
+    jobs = (j for j in jobs if j["status"] == "success")
+    durations = [float(j["duration"]) for j in jobs]
+    mean = statistics.mean(durations)
+    median = statistics.median(durations)
+    stdev = statistics.stdev(durations)
+
+    print("successful job durations:")
+    print(f"    count:  {len(durations)}")
+    print(f"    min:    {min(durations):=.2f}s")
+    print(f"    max:    {max(durations):=.2f}s")
+    print(f"    mean:   {mean:=.2f}s")
+    print(f"    median: {median:=.2f}s")
+    print(f"    stdev:  {stdev:=.2f}s")
+
 
 def most_common_failures(jobs: List[Dict]):
     """Determine the job(s) that fail the most frequently."""
@@ -93,7 +118,7 @@ def most_common_failures(jobs: List[Dict]):
         print(f"    failures: {num_failures} job: {job}")
 
 
-def month_iter(start: datetime.datetime, stop: datetime.datetime) -> Iterator[datetime.date]:
+def month_iter(start: datetime.datetime, stop: datetime.datetime) -> Iterable[datetime.date]:
     """Iterate over the months in between the given inclusive datetimes."""
     ym_start = 12 * start.year + start.month - 1
     ym_end = 12 * stop.year + stop.month - 1
@@ -141,6 +166,66 @@ def plot_failures(jobs: List[Dict]):
     plt.title("CI/CD Jobs Over Time")
     plt.xlabel("Month")
     plt.ylabel("Count")
+    plt.legend(loc="upper right")
+    plt.show()
+
+
+def sliding_window(iterable: Iterable, size: int) -> Iterable[Tuple]:
+    """Generate an iterable of sliding windows over the given iterable."""
+    iterator = iter(iterable)
+    window = collections.deque(itertools.islice(iterator, size - 1), maxlen=size)
+    for item in iterator:
+        window.append(item)
+        yield tuple(window)
+
+
+def rolling_average(data: List[float], window_size: int = 10) -> List[float]:
+    """Calculate the backwards-looking rolling average of the given data."""
+    window_size = min(len(data), window_size)
+    result = []
+
+    # Prime the sliding window pump
+    for i in range(1, window_size):
+        result.append(statistics.mean(data[:i]))
+
+    # Now do the rest with the sliding window
+    for window in sliding_window(data, window_size):
+        result.append(statistics.mean(window))
+    assert len(result) == len(data)
+    return result
+
+
+def plot_durations(jobs: List[Dict]):
+    """Plot successful job durations."""
+    import matplotlib.pyplot as plt
+    import seaborn as sns
+
+    logging.getLogger("matplotlib").setLevel(logging.WARNING)
+    sns.set_theme()
+
+    jobs = sorted((j for j in jobs if j["status"] == "success"), key=lambda j: j["created-date"])
+    durations = [float(j["duration"]) for j in jobs]
+    durations_avg = rolling_average(durations, window_size=20)
+    queued = [float(j["queued-duration"]) for j in jobs]
+    queued_avg = rolling_average(queued, window_size=20)
+    x = range(0, len(durations))
+
+    _fig, ax = plt.subplots()
+    sns.scatterplot(ax=ax, x=x, y=durations, color="C0", alpha=0.7)
+    sns.lineplot(ax=ax, x=x, y=durations_avg, label="duration", color="C0")
+
+    sns.scatterplot(ax=ax, x=x, y=queued, color="C1", alpha=0.7)
+    sns.lineplot(ax=ax, x=x, y=queued_avg, label="queued", color="C1")
+
+    # Set x-axis to show only first and last dates
+    first_date = jobs[0]["created-date"].strftime("%Y-%m-%d")
+    last_date = jobs[-1]["created-date"].strftime("%Y-%m-%d")
+    ax.set_xticks([0, len(durations) - 1])
+    ax.set_xticklabels([first_date, last_date])
+
+    plt.title("CI/CD Job Durations Over Time")
+    plt.xlabel("time")
+    plt.ylabel("seconds")
     plt.legend(loc="upper right")
     plt.show()
 
