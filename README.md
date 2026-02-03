@@ -97,6 +97,8 @@ $ ./joboutput.py \
 
 This will download the job output into `data/my-project/{job_id}.txt` for each `job_id`.
 
+You can use `--status=success` to download successful job outputs instead.
+
 # Identify most frequently failing tests
 
 A large motivation for building this set of tooling is to help identify what flaky tests are the

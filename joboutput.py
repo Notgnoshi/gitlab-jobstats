@@ -1,11 +1,13 @@
 #!/usr/bin/env python3
-"""Download job output for failing jobs."""
+"""Download job output for CI jobs."""
+
 import argparse
 import csv
 import fnmatch
 import logging
 import pathlib
 import sys
+import time
 import urllib.parse
 import urllib.request
 from typing import Dict, Tuple
@@ -51,6 +53,20 @@ def parse_args():
         type=argparse.FileType("r"),
         help="Read the GitLab PAT from the given file",
     )
+    parser.add_argument(
+        "--requests-per-second",
+        "-r",
+        type=float,
+        default=40,
+        help="Limit API requests to this many per second.",
+    )
+
+    parser.add_argument(
+        "--status",
+        "-s",
+        default="failed",
+        help="Job status to download (default: failed)",
+    )
 
     parser.add_argument(
         "--jobs",
@@ -77,11 +93,13 @@ def main(args):
     jobs = (j for j in jobs if any(fnmatch.fnmatchcase(j["name"], pat) for pat in args.jobs))
     # Filter out any jobs whose output we already downloaded
     jobs = (j for j in jobs if not (args.output / f"{j['job-id']}.txt").exists())
-    jobs = [j for j in jobs if j["status"] == "failed"]
+    jobs = [j for j in jobs if j["status"] == args.status]
 
-    logging.info("Found %d failed jobs. Downloading traces ...", len(jobs))
+    rate_limit_delay = 1.0 / args.requests_per_second
+    logging.info("Found %d %s jobs. Downloading traces ...", len(jobs), args.status)
     for job in jobs:
         get_job_trace(token, args.output, job)
+        time.sleep(rate_limit_delay)
 
 
 def get_token(args) -> str:
