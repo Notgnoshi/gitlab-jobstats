@@ -65,7 +65,7 @@ def parse_args():
         "--status",
         "-s",
         default="failed",
-        help="Job status to download (default: failed)",
+        help="Job status to download. Use 'any' for all jobs. (default: failed)",
     )
 
     parser.add_argument(
@@ -92,8 +92,9 @@ def main(args):
     # Look at jobs matching the user-defined name patterns
     jobs = (j for j in jobs if any(fnmatch.fnmatchcase(j["name"], pat) for pat in args.jobs))
     # Filter out any jobs whose output we already downloaded
-    jobs = (j for j in jobs if not (args.output / f"{j['job-id']}.txt").exists())
-    jobs = [j for j in jobs if j["status"] == args.status]
+    jobs = [j for j in jobs if not (args.output / f"{j['job-id']}.txt").exists()]
+    if args.status != "any":
+        jobs = [j for j in jobs if j["status"] == args.status]
 
     rate_limit_delay = 1.0 / args.requests_per_second
     logging.info("Found %d %s jobs. Downloading traces ...", len(jobs), args.status)
