@@ -205,16 +205,27 @@ def plot_durations(jobs: List[Dict]):
 
     jobs = sorted((j for j in jobs if j["status"] == "success"), key=lambda j: j["created-date"])
     durations = [float(j["duration"]) for j in jobs]
-    durations_avg = rolling_average(durations, window_size=20)
     queued = [float(j["queued-duration"]) for j in jobs]
+
+    # Convert to minutes if max duration is over 5 minutes
+    max_duration = max(durations)
+    use_minutes = max_duration > 5 * 60
+    if use_minutes:
+        durations = [d / 60 for d in durations]
+        queued = [q / 60 for q in queued]
+        y_label = "minutes"
+    else:
+        y_label = "seconds"
+
+    durations_avg = rolling_average(durations, window_size=20)
     queued_avg = rolling_average(queued, window_size=20)
     x = range(0, len(durations))
 
     _fig, ax = plt.subplots()
-    sns.scatterplot(ax=ax, x=x, y=durations, color="C0", alpha=0.7)
+    sns.scatterplot(ax=ax, x=x, y=durations, color="C0", alpha=0.6)
     sns.lineplot(ax=ax, x=x, y=durations_avg, label="duration", color="C0")
 
-    sns.scatterplot(ax=ax, x=x, y=queued, color="C1", alpha=0.7)
+    sns.scatterplot(ax=ax, x=x, y=queued, color="C1", alpha=0.6)
     sns.lineplot(ax=ax, x=x, y=queued_avg, label="queued", color="C1")
 
     # Set x-axis to show only first and last dates
@@ -225,7 +236,7 @@ def plot_durations(jobs: List[Dict]):
 
     plt.title("CI/CD Job Durations Over Time")
     plt.xlabel("time")
-    plt.ylabel("seconds")
+    plt.ylabel(y_label)
     plt.legend(loc="upper right")
     plt.show()
 
