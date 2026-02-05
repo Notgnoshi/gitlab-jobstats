@@ -127,3 +127,16 @@ can get spammy).
 * `cargo-nextest`
 
 You can provide your own RegEx to capture failing test names with `--pattern`.
+
+# Visualize collapsible job log sections in Perfetto
+
+Parse a GitLab job log using the log sections described here:
+<https://docs.gitlab.com/ci/jobs/job_logs/#expand-and-collapse-job-log-sections>
+
+```shell
+./jobtrace.py -i data/my-project/7668534.txt -o data/my-project/7668534.json
+```
+
+Then load the generated JSON file into Perfetto for visualization:
+
+![example perfetto screenshot](data/example-jobtrace.png)
