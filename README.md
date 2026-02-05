@@ -140,3 +140,23 @@ Parse a GitLab job log using the log sections described here:
 Then load the generated JSON file into Perfetto for visualization:
 
 ![example perfetto screenshot](data/example-jobtrace.png)
+
+Here's helper functions to hide the details of creating these log sections:
+
+```sh
+log_section_start() {
+    local section_id="$1"
+    local section_header="============================ $section_id ========= (click to expand) ========"
+
+    local section_collapse=""
+    if [ "${LOG_SECTION_COLLAPSE:-true}" = "true" ]; then
+        section_collapse="[collapsed=true]"
+    fi
+    echo -e "\e[0Ksection_start:$(date +%s):${section_id}${section_collapse}\r\e[0K${section_header}"
+}
+
+log_section_end() {
+    local section_id="$1"
+    echo -e "\e[0Ksection_end:$(date +%s):${section_id}\r\e[0K"
+}
+```
