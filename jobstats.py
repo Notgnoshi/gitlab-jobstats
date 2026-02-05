@@ -2,13 +2,15 @@
 """Query a GitLab project for CI/CD job statistics."""
 
 import argparse
+import csv
 import json
 import logging
+import os
 import sys
 import time
 import urllib.parse
 import urllib.request
-from typing import Dict, List, Optional, Union
+from typing import Dict, List, Optional, Set, Tuple, Union
 
 
 def parse_args():
@@ -29,8 +31,7 @@ def parse_args():
     )
     parser.add_argument(
         "output",
-        type=argparse.FileType("w"),
-        help="Script output. Defaults to stdout.",
+        help="Output CSV file path. Will append to existing file if present.",
     )
 
     group = parser.add_argument_group()
@@ -88,18 +89,40 @@ def main(args):
     token = get_token(args)
     endpoint = f"https://{args.domain}/api/v4"
 
+    # Read existing data to enable incremental updates
+    known_pipeline_ids, max_date = read_existing_csv(args.output)
+    append_mode = len(known_pipeline_ids) > 0
+
+    # Auto-set --since from existing data if not provided
+    since = args.since
+    if since is None and max_date is not None:
+        since = max_date
+        logging.info("Auto-set --since to %s based on existing data", since)
+
     pipelines = get_pipelines(
-        token, endpoint, args.project, args.branch, args.max_pipelines, args.since, rate_limit_delay
+        token,
+        endpoint,
+        args.project,
+        args.branch,
+        args.max_pipelines,
+        since,
+        rate_limit_delay,
+        known_pipeline_ids=known_pipeline_ids,
     )
-    logging.info("Found %d total pipelines for %s", len(pipelines), args.project)
+    logging.info("Found %d new pipelines for %s", len(pipelines), args.project)
+
+    if not pipelines:
+        logging.info("No new pipelines to fetch, exiting")
+        return
+
     jobs = []
     for pipeline in pipelines:
         pipeline_jobs = get_jobs_for_pipeline(token, endpoint, args.project, pipeline["id"])
         jobs += pipeline_jobs
         time.sleep(rate_limit_delay)
-    logging.info("Found %d total jobs for %s", len(jobs), args.project)
+    logging.info("Found %d new jobs for %s", len(jobs), args.project)
 
-    jobs2csv(args.output, jobs)
+    jobs2csv(args.output, jobs, append=append_mode)
 
 
 def http_get_json(token: str, url: str) -> Union[List, Dict]:
@@ -117,6 +140,31 @@ def http_get_json(token: str, url: str) -> Union[List, Dict]:
         return data
 
 
+def read_existing_csv(path: str) -> Tuple[Set[int], Optional[str]]:
+    """Read an existing CSV file and return known pipeline IDs and max created date.
+
+    Returns a tuple of (set of pipeline IDs, max created_at date string or None)
+    """
+    if not os.path.exists(path):
+        return set(), None
+
+    pipeline_ids = set()
+    max_date = None
+
+    with open(path, "r", newline="") as f:
+        reader = csv.DictReader(f)
+        for row in reader:
+            pipeline_ids.add(int(row["pipeline-id"]))
+            created = row["created-date"]
+            if max_date is None or created > max_date:
+                max_date = created
+
+    logging.info(
+        "Read %d existing pipeline IDs from %s (max date: %s)", len(pipeline_ids), path, max_date
+    )
+    return pipeline_ids, max_date
+
+
 def get_pipelines(
     token: str,
     endpoint: str,
@@ -125,13 +173,19 @@ def get_pipelines(
     max_pipelines: Optional[int],
     since: Optional[str],
     rate_limit_delay: float,
+    known_pipeline_ids: Optional[Set[int]] = None,
 ) -> List[Dict]:
-    """Get the most recent CI/CD pipelines for the given project."""
+    """Get the most recent CI/CD pipelines for the given project.
+
+    If known_pipeline_ids is provided, stops fetching as soon as a known pipeline
+    is encountered (assumes pipelines are returned newest-first).
+    """
     project = urllib.parse.quote_plus(project)
     if since:
         # If we're limiting via the creation date, we don't want to limit the number of pipelines
         max_pipelines = None
     per_page = max_pipelines or 100
+    known_pipeline_ids = known_pipeline_ids or set()
 
     page_num = 1
     url = f"{endpoint}/projects/{project}/pipelines?per_page={per_page}"
@@ -141,13 +195,25 @@ def get_pipelines(
         url += f"&created_after={since}"
 
     pipelines = []
+    stop_early = False
     while True:
         page = http_get_json(token, f"{url}&page={page_num}")
 
-        page_num += 1
-        pipelines += page
+        for pipeline in page:
+            if pipeline["id"] in known_pipeline_ids:
+                logging.info("Reached known pipeline %d, stopping pagination", pipeline["id"])
+                stop_early = True
+                break
+            pipelines.append(pipeline)
 
-        if not page or len(page) < per_page or (max_pipelines and len(pipelines) >= max_pipelines):
+        page_num += 1
+
+        if (
+            stop_early
+            or not page
+            or len(page) < per_page
+            or (max_pipelines and len(pipelines) >= max_pipelines)
+        ):
             break
         time.sleep(rate_limit_delay)
     return pipelines
@@ -163,23 +229,26 @@ def get_jobs_for_pipeline(token: str, endpoint: str, project: str, pipeline_id: 
     return jobs
 
 
-def jobs2csv(output, jobs: List[Dict]):
+def jobs2csv(path: str, jobs: List[Dict], append: bool = False):
     """Write each job's details to a CSV file for future analysis."""
-    output.write(
-        "job-id,pipeline-id,job-url,created-date,name,branch,status,coverage,duration,queued-duration\n"
-    )
-    for job in jobs:
-        output.write(f"{job['id']},")
-        output.write(f"{job['pipeline']['id']},")
-        output.write(f"{job['web_url']},")
-        output.write(f"{job['created_at']},")
-        output.write(f'"{job["name"]}",')
-        output.write(f"{job['ref']},")
-        output.write(f"{job['status']},")
-        output.write(f"{job['coverage']},")
-        output.write(f"{job['duration']},")
-        output.write(f"{job['queued_duration']}")
-        output.write("\n")
+    mode = "a" if append else "w"
+    with open(path, mode, newline="") as output:
+        if not append:
+            output.write(
+                "job-id,pipeline-id,job-url,created-date,name,branch,status,coverage,duration,queued-duration\n"
+            )
+        for job in jobs:
+            output.write(f"{job['id']},")
+            output.write(f"{job['pipeline']['id']},")
+            output.write(f"{job['web_url']},")
+            output.write(f"{job['created_at']},")
+            output.write(f'"{job["name"]}",')
+            output.write(f"{job['ref']},")
+            output.write(f"{job['status']},")
+            output.write(f"{job['coverage']},")
+            output.write(f"{job['duration']},")
+            output.write(f"{job['queued_duration']}")
+            output.write("\n")
 
 
 def get_token(args) -> str:
