@@ -124,7 +124,7 @@ def month_iter(start: datetime.datetime, stop: datetime.datetime) -> Iterable[da
     ym_end = 12 * stop.year + stop.month - 1
     for ym in range(ym_start, ym_end):
         y, m = divmod(ym, 12)
-        yield datetime.date(year=y, month=m, day=1)
+        yield datetime.date(year=y, month=m + 1, day=1)
 
 
 def fill_under_lines(ax, alpha=0.2, **kwargs):
@@ -143,8 +143,7 @@ def plot_failures(jobs: List[Dict]):
 
     # Time is continuous, so build out an array of all months in between the start and stop dates
     dates = sorted(j["created-date"] for j in jobs)
-    months = month_iter(dates[0], dates[-1])
-    months = [f"{date.year}-{date.month}" for date in dates]
+    months = [f"{date.year}-{date.month}" for date in month_iter(dates[0], dates[-1])]
 
     # Aggregate jobs by month they were created
     jobs_by_month: Dict[str, List[Dict]] = collections.defaultdict(list)
