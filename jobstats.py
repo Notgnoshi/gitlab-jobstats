@@ -12,6 +12,42 @@ import urllib.parse
 import urllib.request
 from typing import Dict, List, Optional, Set, Tuple, Union
 
+try:
+    from tqdm import tqdm
+
+    HAS_TQDM = True
+except ImportError:
+    HAS_TQDM = False
+
+    def tqdm(iterable, **kwargs):
+        """Fallback progress indicator when tqdm is not installed."""
+        total = kwargs.get("total", len(iterable) if hasattr(iterable, "__len__") else None)
+        desc = kwargs.get("desc", "Processing")
+        for i, item in enumerate(iterable, 1):
+            if i == 1 or i % 10 == 0 or i == total:
+                logging.info("%s: %d/%s", desc, i, total or "?")
+            yield item
+
+
+class FallbackProgress:
+    """Fallback progress indicator for unknown totals when tqdm is not installed."""
+
+    def __init__(self, desc="Processing"):
+        self.desc = desc
+        self.n = 0
+        self.last_logged = 0
+
+    def update(self, n=1):
+        self.n += n
+        # Log on first item, then every 10 items
+        if self.last_logged == 0 or self.n - self.last_logged >= 10:
+            logging.info("%s: %d", self.desc, self.n)
+            self.last_logged = self.n
+
+    def close(self):
+        if self.n != self.last_logged:
+            logging.info("%s: %d (done)", self.desc, self.n)
+
 
 def parse_args():
     parser = argparse.ArgumentParser(
@@ -116,7 +152,7 @@ def main(args):
         return
 
     jobs = []
-    for pipeline in pipelines:
+    for pipeline in tqdm(pipelines, desc="Fetching jobs"):
         pipeline_jobs = get_jobs_for_pipeline(token, endpoint, args.project, pipeline["id"])
         jobs += pipeline_jobs
         time.sleep(rate_limit_delay)
@@ -196,6 +232,12 @@ def get_pipelines(
 
     pipelines = []
     stop_early = False
+
+    if HAS_TQDM:
+        progress = tqdm(desc="Fetching pipelines", unit=" pipelines")
+    else:
+        progress = FallbackProgress(desc="Fetching pipelines")
+
     while True:
         page = http_get_json(token, f"{url}&page={page_num}")
 
@@ -205,6 +247,7 @@ def get_pipelines(
                 stop_early = True
                 break
             pipelines.append(pipeline)
+            progress.update(1)
 
         page_num += 1
 
@@ -216,6 +259,8 @@ def get_pipelines(
         ):
             break
         time.sleep(rate_limit_delay)
+
+    progress.close()
     return pipelines
 
 

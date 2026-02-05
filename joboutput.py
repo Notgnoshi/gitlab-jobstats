@@ -12,6 +12,19 @@ import urllib.parse
 import urllib.request
 from typing import Dict, Tuple
 
+try:
+    from tqdm import tqdm
+except ImportError:
+
+    def tqdm(iterable, **kwargs):
+        """Fallback progress indicator when tqdm is not installed."""
+        total = kwargs.get("total", len(iterable) if hasattr(iterable, "__len__") else None)
+        desc = kwargs.get("desc", "Processing")
+        for i, item in enumerate(iterable, 1):
+            if i == 1 or i % 10 == 0 or i == total:
+                logging.info("%s: %d/%s", desc, i, total or "?")
+            yield item
+
 
 def parse_args():
     parser = argparse.ArgumentParser(
@@ -90,15 +103,19 @@ def main(args):
 
     jobs = csv.DictReader(args.csv)
     # Look at jobs matching the user-defined name patterns
-    jobs = (j for j in jobs if any(fnmatch.fnmatchcase(j["name"], pat) for pat in args.jobs))
-    # Filter out any jobs whose output we already downloaded
-    jobs = [j for j in jobs if not (args.output / f"{j['job-id']}.txt").exists()]
+    jobs = [j for j in jobs if any(fnmatch.fnmatchcase(j["name"], pat) for pat in args.jobs)]
     if args.status != "any":
         jobs = [j for j in jobs if j["status"] == args.status]
+    total_jobs = len(jobs)
+    # Filter out any jobs whose output we already downloaded
+    jobs = [j for j in jobs if not (args.output / f"{j['job-id']}.txt").exists()]
+    num_to_get = len(jobs)
+    num_skipped = total_jobs - num_to_get
+    logging.info("Skipping %d/%d jobs whose output is already downloaded", num_skipped, total_jobs)
 
     rate_limit_delay = 1.0 / args.requests_per_second
-    logging.info("Found %d %s jobs. Downloading traces ...", len(jobs), args.status)
-    for job in jobs:
+    logging.info("Downloading traces for %d jobs with status '%s' ...", len(jobs), args.status)
+    for job in tqdm(jobs, desc="Downloading traces"):
         get_job_trace(token, args.output, job)
         time.sleep(rate_limit_delay)
 
@@ -122,7 +139,6 @@ def get_endpoint(job: Dict) -> Tuple[str, str]:
     result = urllib.parse.urlparse(job["job-url"])
     endpoint = f"{result.scheme}://{result.netloc}"
     project = result.path.split("/-/")[0].strip("/")
-    logging.debug("Found endpoint: %s project: %s", endpoint, project)
     project = urllib.parse.quote_plus(project)
     return endpoint, project
 
