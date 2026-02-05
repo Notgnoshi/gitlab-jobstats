@@ -127,6 +127,15 @@ def month_iter(start: datetime.datetime, stop: datetime.datetime) -> Iterable[da
         yield datetime.date(year=y, month=m + 1, day=1)
 
 
+def day_iter(start: datetime.datetime, stop: datetime.datetime) -> Iterable[datetime.date]:
+    """Iterate over the days in between the given inclusive datetimes."""
+    current = start.date()
+    end = stop.date()
+    while current <= end:
+        yield current
+        current += datetime.timedelta(days=1)
+
+
 def fill_under_lines(ax, alpha=0.2, **kwargs):
     for line in ax.lines:
         x, y = line.get_xydata().T
@@ -141,31 +150,46 @@ def plot_failures(jobs: List[Dict]):
     logging.getLogger("matplotlib").setLevel(logging.WARNING)
     sns.set_theme()
 
-    # Time is continuous, so build out an array of all months in between the start and stop dates
+    # Time is continuous, so build out an array of all time buckets between start and stop dates
     dates = sorted(j["created-date"] for j in jobs)
-    months = [f"{date.year}-{date.month}" for date in month_iter(dates[0], dates[-1])]
+    date_range_days = (dates[-1] - dates[0]).days
+    use_daily = date_range_days < 60  # Use daily buckets if less than ~2 months
 
-    # Aggregate jobs by month they were created
-    jobs_by_month: Dict[str, List[Dict]] = collections.defaultdict(list)
+    if use_daily:
+        buckets = [date.strftime("%Y-%m-%d") for date in day_iter(dates[0], dates[-1])]
+        bucket_fmt = "%Y-%m-%d"
+        x_label = "Day"
+    else:
+        buckets = [f"{date.year}-{date.month}" for date in month_iter(dates[0], dates[-1])]
+        bucket_fmt = None  # Custom format for months
+        x_label = "Month"
+
+    # Aggregate jobs by time bucket
+    jobs_by_bucket: Dict[str, List[Dict]] = collections.defaultdict(list)
     for job in jobs:
-        date = job["created-date"]
-        date = f"{date.year}-{date.month}"
-        jobs_by_month[date].append(job)
+        dt = job["created-date"]
+        if use_daily:
+            key = dt.strftime(bucket_fmt)
+        else:
+            key = f"{dt.year}-{dt.month}"
+        jobs_by_bucket[key].append(job)
 
-    total_by_month = [len(jobs_by_month[m]) for m in months]
-    success_by_month = [count_by_status(jobs_by_month[m], "success") for m in months]
-    failed_by_month = [count_by_status(jobs_by_month[m], "failed") for m in months]
+    total_by_bucket = [len(jobs_by_bucket[b]) for b in buckets]
+    success_by_bucket = [count_by_status(jobs_by_bucket[b], "success") for b in buckets]
+    failed_by_bucket = [count_by_status(jobs_by_bucket[b], "failed") for b in buckets]
 
-    sns.lineplot(x=months, y=total_by_month, label="total")
-    sns.lineplot(x=months, y=failed_by_month, label="failed")
-    sns.lineplot(x=months, y=success_by_month, label="success")
+    sns.lineplot(x=buckets, y=total_by_bucket, label="total")
+    sns.lineplot(x=buckets, y=failed_by_bucket, label="failed")
+    sns.lineplot(x=buckets, y=success_by_bucket, label="success")
 
     fill_under_lines(plt.gca())
 
     plt.title("CI/CD Jobs Over Time")
-    plt.xlabel("Month")
+    plt.xlabel(x_label)
     plt.ylabel("Count")
     plt.legend(loc="upper right")
+    plt.xticks(rotation=45 if use_daily else 0)
+    plt.tight_layout()
     plt.show()
 
 
