@@ -124,6 +124,13 @@ def parse_args():
         default="*",
         help="Job name globs to include. May be given multiple times",
     )
+    group.add_argument(
+        "--status",
+        "-s",
+        nargs="*",
+        default=None,
+        help="Filter jobs by status (e.g. success, failed, canceled)",
+    )
 
     return parser.parse_args()
 
@@ -162,7 +169,7 @@ def main(args):
     jobs = []
     for pipeline in tqdm(pipelines, desc="Fetching jobs"):
         pipeline_jobs = get_jobs_for_pipeline(
-            token, endpoint, args.project, pipeline["id"], args.jobs
+            token, endpoint, args.project, pipeline["id"], args.jobs, args.status
         )
         jobs += pipeline_jobs
         time.sleep(rate_limit_delay)
@@ -275,7 +282,12 @@ def get_pipelines(
 
 
 def get_jobs_for_pipeline(
-    token: str, endpoint: str, project: str, pipeline_id: int, filters: List[str]
+    token: str,
+    endpoint: str,
+    project: str,
+    pipeline_id: int,
+    filters: List[str],
+    statuses: Optional[List[str]] = None,
 ) -> List[Dict]:
     """Get the jobs for the given pipeline."""
     project = urllib.parse.quote_plus(project)
@@ -284,6 +296,8 @@ def get_jobs_for_pipeline(
     url = f"{endpoint}/projects/{project}/pipelines/{pipeline_id}/jobs?include_retried=true"
     jobs = http_get_json(token, url)
     jobs = [j for j in jobs if any(fnmatch.fnmatchcase(j["name"], pat) for pat in filters)]
+    if statuses:
+        jobs = [j for j in jobs if j["status"] in statuses]
     return jobs
 
 
