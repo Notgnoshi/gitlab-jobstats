@@ -198,7 +198,7 @@ def read_existing_csv(path: str) -> Tuple[Set[int], Optional[str]]:
 
     Returns a tuple of (set of pipeline IDs, max created_at date string or None)
     """
-    if not os.path.exists(path):
+    if not os.path.isfile(path):
         return set(), None
 
     pipeline_ids = set()
