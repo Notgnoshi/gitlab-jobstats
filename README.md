@@ -2,6 +2,22 @@
 
 Query statistics for GitLab CI/CD jobs
 
+# Dependencies
+
+Unless you're generating plots, there are no third party dependencies. If you want plots, you'll
+need to install `seaborn` and `matplotlib`:
+
+```shell
+pip install seaborn matplotlib
+```
+
+There's a `tqdm` polyfill for progress bars; if you want better progress bars, you can install
+`tqdm`:
+
+```shell
+pip install tqdm
+```
+
 # Why not use `https://gitlab.com/${PROJECT}/-/pipelines/charts`?
 
 Jobstats was designed with the goal of identifying and fixing flaky CI jobs.
