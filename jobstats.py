@@ -3,6 +3,7 @@
 
 import argparse
 import csv
+import fnmatch
 import json
 import logging
 import os
@@ -116,6 +117,13 @@ def parse_args():
         default=None,
         help="Filter jobs to the specified branch",
     )
+    group.add_argument(
+        "--jobs",
+        "-j",
+        nargs="*",
+        default="*",
+        help="Job name globs to include. May be given multiple times",
+    )
 
     return parser.parse_args()
 
@@ -153,7 +161,9 @@ def main(args):
 
     jobs = []
     for pipeline in tqdm(pipelines, desc="Fetching jobs"):
-        pipeline_jobs = get_jobs_for_pipeline(token, endpoint, args.project, pipeline["id"])
+        pipeline_jobs = get_jobs_for_pipeline(
+            token, endpoint, args.project, pipeline["id"], args.jobs
+        )
         jobs += pipeline_jobs
         time.sleep(rate_limit_delay)
     logging.info("Found %d new jobs for %s", len(jobs), args.project)
@@ -264,13 +274,16 @@ def get_pipelines(
     return pipelines
 
 
-def get_jobs_for_pipeline(token: str, endpoint: str, project: str, pipeline_id: int) -> List[Dict]:
+def get_jobs_for_pipeline(
+    token: str, endpoint: str, project: str, pipeline_id: int, filters: List[str]
+) -> List[Dict]:
     """Get the jobs for the given pipeline."""
     project = urllib.parse.quote_plus(project)
     # Assume that no pipeline has more than the pagination limit number of jobs. Include retried
     # jobs, because the purpose of this project is to get statistics for flaky CI/CD jobs
     url = f"{endpoint}/projects/{project}/pipelines/{pipeline_id}/jobs?include_retried=true"
     jobs = http_get_json(token, url)
+    jobs = [j for j in jobs if any(fnmatch.fnmatchcase(j["name"], pat) for pat in filters)]
     return jobs
 
 
